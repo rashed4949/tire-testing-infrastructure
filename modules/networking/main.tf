@@ -71,21 +71,13 @@ resource "aws_security_group" "ec2_sg" {
 
   # Jenkins web UI
   ingress {
-    description = "Jenkins"
+    description = "Jenkins and App"
     from_port   = 8080
     to_port     = 8080
     protocol    = "tcp"
     cidr_blocks = [var.my_ip]
   }
 
-  # App main port — React + API
-  ingress {
-    description = "App"
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = [var.my_ip]
-  }
 
   # Actuator port — health + Prometheus metrics
   ingress {

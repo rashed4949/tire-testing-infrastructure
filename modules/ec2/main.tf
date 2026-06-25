@@ -150,7 +150,10 @@ resource "aws_instance" "prod_hybrid" {
   vpc_security_group_ids = [var.security_group_id]
   key_name               = var.key_name
 
-  root_block_device { volume_size = 20; volume_type = "gp3" }
+  root_block_device {
+    volume_size = 20
+    volume_type = "gp3"
+  }
 
   user_data = <<-USERDATA
     #!/bin/bash
@@ -203,7 +206,10 @@ resource "aws_instance" "monitoring" {
   vpc_security_group_ids = [var.security_group_id]
   key_name               = var.key_name
 
-  root_block_device { volume_size = 20; volume_type = "gp3" }
+  root_block_device {
+    volume_size = 20
+    volume_type = "gp3"
+  }
 
   user_data = <<-USERDATA
     #!/bin/bash
