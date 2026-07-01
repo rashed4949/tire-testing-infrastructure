@@ -5,7 +5,6 @@ variable "key_name"           { type = string }
 variable "ami_id"             { type = string }
 variable "ecr_repository_arn" { type = string }
 
-# ── IAM Role: Jenkins EC2 can push/pull ECR without static credentials ────
 resource "aws_iam_role" "jenkins" {
   name = "${var.project_name}-jenkins-role"
   assume_role_policy = jsonencode({
@@ -53,8 +52,6 @@ resource "aws_iam_instance_profile" "jenkins" {
   role = aws_iam_role.jenkins.name
 }
 
-# ── Jenkins EC2 ───────────────────────────────────────────────────────────
-# All tools are installed automatically via user_data when EC2 first boots
 resource "aws_instance" "jenkins" {
   ami                    = var.ami_id
   instance_type          = "t3.medium"
@@ -64,7 +61,7 @@ resource "aws_instance" "jenkins" {
   iam_instance_profile   = aws_iam_instance_profile.jenkins.name
 
   root_block_device {
-    volume_size = 30    # 30GB: Maven cache + Docker images take space
+    volume_size = 30
     volume_type = "gp3"
   }
 
@@ -76,24 +73,24 @@ resource "aws_instance" "jenkins" {
 
     apt-get update -y
 
-    # ── Java 21 ────────────────────────────────────────────────────────
+    # ── Java 21
     apt-get install -y openjdk-21-jdk
     echo "Java 21 installed"
 
-    # ── Maven ──────────────────────────────────────────────────────────
+    # ── Maven
     apt-get install -y maven git curl unzip
     echo "Maven installed"
 
-    # ── Docker ─────────────────────────────────────────────────────────
+    # ── Docker
     apt-get install -y docker.io
     systemctl enable --now docker
     echo "Docker installed"
 
-    # ── Ansible ────────────────────────────────────────────────────────
+    # ── Ansible
     apt-get install -y ansible python3-boto3 python3-botocore
     echo "Ansible installed"
 
-    # ── Jenkins ────────────────────────────────────────────────────────
+    # ── Jenkins
     curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key \
       | tee /usr/share/keyrings/jenkins-keyring.asc > /dev/null
     echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] \
@@ -142,7 +139,6 @@ resource "aws_instance" "jenkins" {
   tags = { Name = "${var.project_name}-jenkins" }
 }
 
-# ── Prod EC2 (runs the Docker container) ─────────────────────────────────
 resource "aws_instance" "prod_hybrid" {
   ami                    = var.ami_id
   instance_type          = "t3.small"
@@ -198,7 +194,6 @@ resource "aws_instance" "prod_hybrid" {
   tags = { Name = "${var.project_name}-prod-hybrid" }
 }
 
-# ── Monitoring EC2 (Prometheus + Grafana) ─────────────────────────────────
 resource "aws_instance" "monitoring" {
   ami                    = var.ami_id
   instance_type          = "t3.small"
