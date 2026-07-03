@@ -20,21 +20,6 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
   tags = { Name = "${var.project_name}-public" }
 }
-
-resource "aws_subnet" "private_a" {
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.2.0/24"
-  availability_zone = "eu-central-1a"
-  tags = { Name = "${var.project_name}-private-a" }
-}
-
-resource "aws_subnet" "private_b" {
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.3.0/24"
-  availability_zone = "eu-central-1b"
-  tags = { Name = "${var.project_name}-private-b" }
-}
-
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
   route {
@@ -122,6 +107,4 @@ resource "aws_security_group" "ec2_sg" {
 
 output "vpc_id"               { value = aws_vpc.main.id }
 output "public_subnet_id"    { value = aws_subnet.public.id }
-output "private_subnet_id_a" { value = aws_subnet.private_a.id }
-output "private_subnet_id_b" { value = aws_subnet.private_b.id }
 output "ec2_sg_id"           { value = aws_security_group.ec2_sg.id }

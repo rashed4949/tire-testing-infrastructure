@@ -21,11 +21,6 @@ variable "my_ip" {
   # Get yours: curl https://checkip.amazonaws.com
 }
 
-variable "db_password" {
-  description = "RDS PostgreSQL password"
-  type        = string
-  sensitive   = true
-}
 
 variable "create_eks" {
   description = "Set true ONLY during Pipeline 3 experiments. EKS costs ~€80/month."

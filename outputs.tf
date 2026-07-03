@@ -38,14 +38,14 @@ output "jenkins_private_ip" {
   value = module.ec2.jenkins_private_ip
 }
 
-output "rds_endpoint" {
+/*output "rds_endpoint" {
   value = module.rds.endpoint
 }
 
 output "rds_db_url" {
   description = "JDBC URL — paste this into Jenkins credentials"
   value       = module.rds.db_url
-}
+}*/
 
 output "aws_account_id" {
   description = "Your AWS account ID — needed in Jenkinsfile"

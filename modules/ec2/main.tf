@@ -61,7 +61,7 @@ resource "aws_instance" "jenkins" {
   iam_instance_profile   = aws_iam_instance_profile.jenkins.name
 
   root_block_device {
-    volume_size = 30
+    volume_size = 20
     volume_type = "gp3"
   }
 
@@ -69,71 +69,69 @@ resource "aws_instance" "jenkins" {
     #!/bin/bash
     set -e
     exec > /var/log/user-data.log 2>&1
-    echo "Starting Jenkins EC2 setup..."
+    echo "=== Starting Jenkins EC2 setup ==="
 
     apt-get update -y
 
-    # ── Java 21
+    # Java 21
     apt-get install -y openjdk-21-jdk
-    echo "Java 21 installed"
+    echo "Java 21: OK"
 
-    # ── Maven
+    # Maven + tools
     apt-get install -y maven git curl unzip
-    echo "Maven installed"
+    echo "Maven: OK"
 
-    # ── Docker
+    # Docker
     apt-get install -y docker.io
     systemctl enable --now docker
-    echo "Docker installed"
+    echo "Docker: OK"
 
-    # ── Ansible
+    # Ansible
     apt-get install -y ansible python3-boto3 python3-botocore
-    echo "Ansible installed"
+    ansible-galaxy collection install community.docker
+    echo "Ansible: OK"
 
-    # ── Jenkins
-    curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key \
-      | tee /usr/share/keyrings/jenkins-keyring.asc > /dev/null
-    echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] \
-      https://pkg.jenkins.io/debian-stable binary/" \
-      | tee /etc/apt/sources.list.d/jenkins.list > /dev/null
+    # Jenkins — import key via keyserver (most reliable on Ubuntu 22.04)
+    gpg --keyserver hkps://keyserver.ubuntu.com \
+      --recv-keys 7198F4B714ABFC68
+
+    gpg --export 7198F4B714ABFC68 \
+      | tee /usr/share/keyrings/jenkins-keyring.gpg > /dev/null
+
+    echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.gpg] https://pkg.jenkins.io/debian-stable binary/" \
+      > /etc/apt/sources.list.d/jenkins.list
+
     apt-get update -y
     apt-get install -y jenkins
     usermod -aG docker jenkins
     systemctl enable --now jenkins
-    echo "Jenkins installed"
+    echo "Jenkins: OK"
 
-    # ── AWS CLI ────────────────────────────────────────────────────────
-    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/aws.zip
-    unzip -q /tmp/aws.zip -d /tmp
-    /tmp/aws/install
-    echo "AWS CLI installed"
-
-    # ── kubectl (for Pipeline 3 later) ─────────────────────────────────
+    # kubectl
     KUBECTL_VER=$(curl -sL https://dl.k8s.io/release/stable.txt)
     curl -LO "https://dl.k8s.io/release/$KUBECTL_VER/bin/linux/amd64/kubectl"
     install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-    echo "kubectl installed"
+    echo "kubectl: OK"
 
-    # ── Helm (for Pipeline 3 later) ─────────────────────────────────────
+    # Helm
     curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-    echo "Helm installed"
+    echo "Helm: OK"
 
-    # ── ArgoCD CLI (for Pipeline 3 later) ───────────────────────────────
+    # ArgoCD CLI
     curl -sSL -o /usr/local/bin/argocd \
       https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
     chmod +x /usr/local/bin/argocd
-    echo "ArgoCD CLI installed"
+    echo "ArgoCD CLI: OK"
 
-    # ── DORA logging directory ──────────────────────────────────────────
+    # DORA log directory
     mkdir -p /var/log/dora
     chmod 777 /var/log/dora
     echo "commit_hash,commit_time,pipeline_start,build_end,deploy_start,deploy_end,status,pipeline" \
       > /var/log/dora/metrics.csv
     echo "incident_start,recovery_end,status,pipeline" \
       > /var/log/dora/mttr.csv
-    echo "DORA log dir created"
 
-    echo "Jenkins EC2 setup COMPLETE"
+    echo "=== Jenkins EC2 setup COMPLETE ==="
   USERDATA
 
   tags = { Name = "${var.project_name}-jenkins" }
@@ -147,7 +145,7 @@ resource "aws_instance" "prod_hybrid" {
   key_name               = var.key_name
 
   root_block_device {
-    volume_size = 20
+    volume_size = 15
     volume_type = "gp3"
   }
 
@@ -160,13 +158,27 @@ resource "aws_instance" "prod_hybrid" {
     apt-get update -y
     apt-get install -y docker.io curl
 
-    # AWS CLI (needed to authenticate Docker with ECR)
+    # AWS CLI for ECR authentication
     curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/aws.zip
     unzip -q /tmp/aws.zip -d /tmp && /tmp/aws/install
 
     systemctl enable --now docker
 
-    # Node Exporter for Prometheus system metrics
+    apt-get install -y postgresql postgresql-contrib
+
+    systemctl enable --now postgresql
+
+    # Create database and user
+    sudo -u postgres psql <<'SQL'
+    CREATE DATABASE tire_testing;
+    CREATE USER tire_user WITH ENCRYPTED PASSWORD 'thesis_pass';
+    GRANT ALL PRIVILEGES ON DATABASE tire_testing TO tire_user;
+    \c tire_testing
+    GRANT ALL ON SCHEMA public TO tire_user;
+    SQL
+
+    echo "PostgreSQL configured"
+
     NE_VER="1.7.0"
     wget -q "https://github.com/prometheus/node_exporter/releases/download/v$NE_VER/node_exporter-$NE_VER.linux-amd64.tar.gz"
     tar xvf "node_exporter-$NE_VER.linux-amd64.tar.gz"
@@ -193,7 +205,6 @@ resource "aws_instance" "prod_hybrid" {
 
   tags = { Name = "${var.project_name}-prod-hybrid" }
 }
-
 resource "aws_instance" "monitoring" {
   ami                    = var.ami_id
   instance_type          = "t3.small"
@@ -202,7 +213,7 @@ resource "aws_instance" "monitoring" {
   key_name               = var.key_name
 
   root_block_device {
-    volume_size = 20
+    volume_size = 15
     volume_type = "gp3"
   }
 

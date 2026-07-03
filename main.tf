@@ -38,18 +38,6 @@ module "ecr" {
   repository_name = "tire-testing"
 }
 
-module "rds" {
-  source          = "./modules/rds"
-  project_name    = var.project_name
-  subnet_ids      = [
-    module.networking.private_subnet_id_a,
-    module.networking.private_subnet_id_b
-  ]
-  vpc_id          = module.networking.vpc_id
-  db_password     = var.db_password
-  vpc_cidr        = "10.0.0.0/16"
-}
-
 module "ec2" {
   source             = "./modules/ec2"
   project_name       = var.project_name
@@ -65,8 +53,7 @@ module "eks" {
   create_eks         = var.create_eks
   project_name       = var.project_name
   subnet_ids         = [
-    module.networking.public_subnet_id,
-    module.networking.private_subnet_id_a
+    module.networking.public_subnet_id
   ]
   node_instance_type = "t3.medium"
   eks_version        = "1.29"
