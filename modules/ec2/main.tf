@@ -3,7 +3,8 @@ variable "subnet_id"          { type = string }
 variable "security_group_id"  { type = string }
 variable "key_name"           { type = string }
 variable "ami_id"             { type = string }
-variable "ecr_repository_arn" { type = string }
+variable "ecr_release_arn"  { type = string }
+variable "ecr_snapshot_arn" { type = string }
 
 resource "aws_iam_role" "jenkins" {
   name = "${var.project_name}-jenkins-role"
@@ -41,7 +42,7 @@ resource "aws_iam_role_policy" "jenkins_ecr" {
           "ecr:DescribeImages",
           "ecr:ListImages"
         ]
-        Resource = [var.ecr_repository_arn]
+        Resource = [var.ecr_release_arn, var.ecr_snapshot_arn]
       }
     ]
   })
@@ -51,6 +52,7 @@ resource "aws_iam_instance_profile" "jenkins" {
   name = "${var.project_name}-jenkins-profile"
   role = aws_iam_role.jenkins.name
 }
+
 resource "aws_iam_role" "prod_ecr" {
   name = "${var.project_name}-prod-ecr-role"
   assume_role_policy = jsonencode({
@@ -81,7 +83,7 @@ resource "aws_iam_role_policy" "prod_ecr_pull" {
           "ecr:GetDownloadUrlForLayer",
           "ecr:BatchGetImage"
         ]
-        Resource = [var.ecr_repository_arn]
+        Resource = [var.ecr_release_arn, var.ecr_snapshot_arn]
       }
     ]
   })
@@ -90,6 +92,39 @@ resource "aws_iam_role_policy" "prod_ecr_pull" {
 resource "aws_iam_instance_profile" "prod_ecr" {
   name = "${var.project_name}-prod-ecr-profile"
   role = aws_iam_role.prod_ecr.name
+}
+
+resource "aws_iam_role" "monitoring_ecr" {
+  name = "${var.project_name}-monitoring-ecr-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "monitoring_ecr_pull" {
+  name = "ECRPullOnly"
+  role = aws_iam_role.monitoring_ecr.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      { Effect = "Allow", Action = ["ecr:GetAuthorizationToken"], Resource = "*" },
+      {
+        Effect   = "Allow"
+        Action   = ["ecr:BatchCheckLayerAvailability", "ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage"]
+        Resource = [var.ecr_release_arn, var.ecr_snapshot_arn]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_instance_profile" "monitoring_ecr" {
+  name = "${var.project_name}-monitoring-ecr-profile"
+  role = aws_iam_role.monitoring_ecr.name
 }
 
 resource "aws_instance" "jenkins" {
@@ -125,6 +160,10 @@ resource "aws_instance" "jenkins" {
     apt-get install -y docker.io
     systemctl enable --now docker
     echo "Docker: OK"
+
+    # AWS CLI for ECR pull
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/aws.zip
+    unzip -q /tmp/aws.zip -d /tmp && /tmp/aws/install
 
     # Ansible
     apt-get install -y ansible python3-boto3 python3-botocore
@@ -215,8 +254,15 @@ resource "aws_instance" "prod_hybrid" {
     CREATE USER tire_user WITH ENCRYPTED PASSWORD 'thesis_pass';
     GRANT ALL PRIVILEGES ON DATABASE tire_testing TO tire_user;
     \c tire_testing
-    GRANT ALL ON SCHEMA public TO tire_user;
+    ALTER SCHEMA public OWNER TO tire_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO tire_user;
     SQL
+
+    # Allow Postgres to accept connections from Docker bridge network
+    PG_VER=$(ls /etc/postgresql)
+    sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/" /etc/postgresql/$PG_VER/main/postgresql.conf
+    echo "host    tire_testing    tire_user    172.17.0.0/16    scram-sha-256" >> /etc/postgresql/$PG_VER/main/pg_hba.conf
+    systemctl restart postgresql
 
     echo "PostgreSQL configured"
 
@@ -246,12 +292,14 @@ resource "aws_instance" "prod_hybrid" {
 
   tags = { Name = "${var.project_name}-prod-hybrid" }
 }
+
 resource "aws_instance" "monitoring" {
   ami                    = var.ami_id
   instance_type          = "t3.small"
   subnet_id              = var.subnet_id
   vpc_security_group_ids = [var.security_group_id]
   key_name               = var.key_name
+  iam_instance_profile   = aws_iam_instance_profile.monitoring_ecr.name
 
   root_block_device {
     volume_size = 15
@@ -265,7 +313,36 @@ resource "aws_instance" "monitoring" {
     echo "Starting Monitoring EC2 setup..."
 
     apt-get update -y
-    apt-get install -y curl wget software-properties-common apt-transport-https
+    apt-get install -y curl wget software-properties-common apt-transport-https unzip
+
+    # Docker (for staging app container)
+    apt-get install -y docker.io
+    systemctl enable --now docker
+    echo "Docker: OK"
+
+    # AWS CLI for ECR pull
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/aws.zip
+    unzip -q /tmp/aws.zip -d /tmp && /tmp/aws/install
+    echo "AWS CLI: OK"
+
+    # PostgreSQL (for staging DB)
+    apt-get install -y postgresql postgresql-contrib
+    systemctl enable --now postgresql
+
+    sudo -u postgres psql <<'SQL'
+    CREATE DATABASE tire_testing_staging;
+    CREATE USER tire_user WITH ENCRYPTED PASSWORD 'thesis_pass';
+    GRANT ALL PRIVILEGES ON DATABASE tire_testing_staging TO tire_user;
+    \c tire_testing_staging
+    ALTER SCHEMA public OWNER TO tire_user;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO tire_user;
+    SQL
+
+    PG_VER=$(ls /etc/postgresql)
+    sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/" /etc/postgresql/$PG_VER/main/postgresql.conf
+    echo "host    tire_testing_staging    tire_user    172.17.0.0/16    scram-sha-256" >> /etc/postgresql/$PG_VER/main/pg_hba.conf
+    systemctl restart postgresql
+    echo "PostgreSQL (staging) configured"
 
     # Prometheus
     PROM_VER="2.50.1"

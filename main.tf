@@ -35,7 +35,7 @@ module "networking" {
 
 module "ecr" {
   source          = "./modules/ecr"
-  repository_name = "tire-testing"
+ //repository_name = "tire-testing"
 }
 
 module "ec2" {
@@ -45,7 +45,8 @@ module "ec2" {
   security_group_id  = module.networking.ec2_sg_id
   key_name           = var.key_name
   ami_id             = "ami-0faab6bdbac9486fb"  # Ubuntu 22.04 eu-central-1
-  ecr_repository_arn = module.ecr.repository_arn
+  ecr_release_arn  = module.ecr.ecr_release_arn
+  ecr_snapshot_arn = module.ecr.ecr_snapshot_arn
 }
 
 module "eks" {

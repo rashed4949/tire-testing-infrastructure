@@ -1,19 +1,23 @@
-variable "repository_name" { type = string }
-
-resource "aws_ecr_repository" "main" {
-  name                 = var.repository_name
+resource "aws_ecr_repository" "release" {
+  name                 = "tire-testing-release"
   image_tag_mutability = "MUTABLE"
-
   image_scanning_configuration {
-    scan_on_push = true  # Free vulnerability scanning
+    scan_on_push = true
   }
-
-  tags = { Name = var.repository_name }
+  tags = { Name = "tire-testing-release" }
 }
 
-# Keep only last 10 images to control storage cost
-resource "aws_ecr_lifecycle_policy" "main" {
-  repository = aws_ecr_repository.main.name
+resource "aws_ecr_repository" "snapshot" {
+  name                 = "tire-testing-snapshot"
+  image_tag_mutability = "MUTABLE"
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+  tags = { Name = "tire-testing-snapshot" }
+}
+
+resource "aws_ecr_lifecycle_policy" "release" {
+  repository = aws_ecr_repository.release.name
   policy = jsonencode({
     rules = [{
       rulePriority = 1
@@ -28,5 +32,23 @@ resource "aws_ecr_lifecycle_policy" "main" {
   })
 }
 
-output "repository_url" { value = aws_ecr_repository.main.repository_url }
-output "repository_arn" { value = aws_ecr_repository.main.arn }
+resource "aws_ecr_lifecycle_policy" "snapshot" {
+  repository = aws_ecr_repository.snapshot.name
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "Keep last 10 images"
+      selection = {
+        tagStatus   = "any"
+        countType   = "imageCountMoreThan"
+        countNumber = 10
+      }
+      action = { type = "expire" }
+    }]
+  })
+}
+
+output "ecr_release_arn" { value = aws_ecr_repository.release.arn }
+output "ecr_snapshot_arn" { value = aws_ecr_repository.snapshot.arn }
+output "ecr_release_url" { value = aws_ecr_repository.release.repository_url }
+output "ecr_snapshot_url" { value = aws_ecr_repository.snapshot.repository_url }
