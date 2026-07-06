@@ -20,6 +20,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
   tags = { Name = "${var.project_name}-public" }
 }
+
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
   route {
@@ -48,11 +49,11 @@ resource "aws_security_group" "ec2_sg" {
   }
 
   ingress {
-    description = "Jenkins and App"
+    description = "Jenkins and App - GitHub webhook access"
     from_port   = 8080
     to_port     = 8080
     protocol    = "tcp"
-    cidr_blocks = [var.my_ip]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
@@ -105,6 +106,6 @@ resource "aws_security_group" "ec2_sg" {
   tags = { Name = "${var.project_name}-ec2-sg" }
 }
 
-output "vpc_id"               { value = aws_vpc.main.id }
-output "public_subnet_id"    { value = aws_subnet.public.id }
-output "ec2_sg_id"           { value = aws_security_group.ec2_sg.id }
+output "vpc_id"            { value = aws_vpc.main.id }
+output "public_subnet_id"  { value = aws_subnet.public.id }
+output "ec2_sg_id"         { value = aws_security_group.ec2_sg.id }
