@@ -51,3 +51,7 @@ output "aws_account_id" {
   description = "Your AWS account ID — needed in Jenkinsfile"
   value       = data.aws_caller_identity.current.account_id
 }
+
+output "monitoring_public_ip" {
+  value = module.ec2.monitoring_public_ip  # match whatever attribute the module exposes
+}

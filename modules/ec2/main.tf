@@ -51,6 +51,46 @@ resource "aws_iam_instance_profile" "jenkins" {
   name = "${var.project_name}-jenkins-profile"
   role = aws_iam_role.jenkins.name
 }
+resource "aws_iam_role" "prod_ecr" {
+  name = "${var.project_name}-prod-ecr-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "prod_ecr_pull" {
+  name = "ECRPullOnly"
+  role = aws_iam_role.prod_ecr.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage"
+        ]
+        Resource = [var.ecr_repository_arn]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_instance_profile" "prod_ecr" {
+  name = "${var.project_name}-prod-ecr-profile"
+  role = aws_iam_role.prod_ecr.name
+}
 
 resource "aws_instance" "jenkins" {
   ami                    = var.ami_id
@@ -143,6 +183,7 @@ resource "aws_instance" "prod_hybrid" {
   subnet_id              = var.subnet_id
   vpc_security_group_ids = [var.security_group_id]
   key_name               = var.key_name
+  iam_instance_profile   = aws_iam_instance_profile.prod_ecr.name
 
   root_block_device {
     volume_size = 15
