@@ -56,6 +56,21 @@ resource "aws_iam_instance_profile" "jenkins" {
   role = aws_iam_role.jenkins.name
 }
 
+resource "aws_iam_role_policy" "jenkins_eks" {
+  name = "EKSAccess"
+  role = aws_iam_role.jenkins.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["eks:DescribeCluster", "eks:ListClusters"]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role" "prod_ecr" {
   name = "${var.project_name}-prod-ecr-role"
   assume_role_policy = jsonencode({
