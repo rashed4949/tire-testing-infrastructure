@@ -34,7 +34,18 @@ resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public.id
   route_table_id = aws_route_table.public.id
 }
+resource "aws_subnet" "public2" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.2.0/24"
+  availability_zone       = "eu-central-1b"
+  map_public_ip_on_launch = true
+  tags = { Name = "${var.project_name}-public2" }
+}
 
+resource "aws_route_table_association" "public2" {
+  subnet_id      = aws_subnet.public2.id
+  route_table_id = aws_route_table.public.id
+}
 resource "aws_security_group" "ec2_sg" {
   name        = "${var.project_name}-ec2-sg"
   description = "Thesis pipeline security group"
@@ -109,3 +120,4 @@ resource "aws_security_group" "ec2_sg" {
 output "vpc_id"            { value = aws_vpc.main.id }
 output "public_subnet_id"  { value = aws_subnet.public.id }
 output "ec2_sg_id"         { value = aws_security_group.ec2_sg.id }
+output "public_subnet2_id" { value = aws_subnet.public2.id }

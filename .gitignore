@@ -7,3 +7,4 @@ terraform.tfvars
 crash.log
 *.pem
 *.key
+eks.auto.tfvars

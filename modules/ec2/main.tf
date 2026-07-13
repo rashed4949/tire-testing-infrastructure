@@ -5,6 +5,8 @@ variable "key_name"           { type = string }
 variable "ami_id"             { type = string }
 variable "ecr_release_arn"  { type = string }
 variable "ecr_snapshot_arn" { type = string }
+variable "ecr_gitops_release_arn"  { type = string }
+variable "ecr_gitops_snapshot_arn" { type = string }
 
 resource "aws_iam_role" "jenkins" {
   name = "${var.project_name}-jenkins-role"
@@ -42,7 +44,8 @@ resource "aws_iam_role_policy" "jenkins_ecr" {
           "ecr:DescribeImages",
           "ecr:ListImages"
         ]
-        Resource = [var.ecr_release_arn, var.ecr_snapshot_arn]
+        Resource = [var.ecr_release_arn, var.ecr_snapshot_arn,var.ecr_gitops_release_arn,
+          var.ecr_gitops_snapshot_arn]
       }
     ]
   })
